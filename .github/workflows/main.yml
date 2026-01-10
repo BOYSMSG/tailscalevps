@@ -9,7 +9,7 @@ jobs:
     timeout-minutes: 3600
 
     steps:
-      - name: Enable RDP & Firewall
+      - name: Enable RDP and Firewall
         run: |
           Set-ItemProperty -Path "HKLM:\System\CurrentControlSet\Control\Terminal Server" `
             -Name "fDenyTSConnections" -Value 0 -Force
@@ -21,12 +21,11 @@ jobs:
 
           Restart-Service TermService -Force
 
-      - name: Create RDP User (FIXED EASY PASSWORD)
+      - name: Create RDP User (WORKING PASSWORD)
         run: |
           $username = "RDP"
-          $password = "Rdp@123"
+          $password = "Rdp@12345678"
 
-          # Delete user if already exists (IMPORTANT)
           if (Get-LocalUser -Name $username -ErrorAction SilentlyContinue) {
               Remove-LocalUser -Name $username
           }
