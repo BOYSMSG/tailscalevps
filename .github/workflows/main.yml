@@ -9,32 +9,35 @@ jobs:
     timeout-minutes: 3600
 
     steps:
-      - name: Enable RDP and Firewall
+      - name: Disable Password Complexity (REQUIRED)
         run: |
-          Set-ItemProperty -Path "HKLM:\System\CurrentControlSet\Control\Terminal Server" `
+          secedit /export /cfg C:\secpol.cfg
+          (Get-Content C:\secpol.cfg) `
+            -replace "PasswordComplexity\s*=\s*1", "PasswordComplexity = 0" `
+            -replace "MinimumPasswordLength\s*=\s*\d+", "MinimumPasswordLength = 1" |
+            Set-Content C:\secpol.cfg
+          secedit /configure /db C:\Windows\Security\Database\secedit.sdb /cfg C:\secpol.cfg /areas SECURITYPOLICY
+          gpupdate /force
+
+      - name: Enable RDP
+        run: |
+          Set-ItemProperty "HKLM:\System\CurrentControlSet\Control\Terminal Server" `
             -Name "fDenyTSConnections" -Value 0 -Force
-
-          Set-ItemProperty -Path "HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp" `
-            -Name "UserAuthentication" -Value 0 -Force
-
           netsh advfirewall firewall add rule name="RDP-3389" dir=in action=allow protocol=TCP localport=3389
-
           Restart-Service TermService -Force
 
-      - name: Create RDP User (WORKING PASSWORD)
+      - name: Create RDP User (EASY PASSWORD)
         run: |
           $username = "RDP"
-          $password = "Rdp@12345678"
+          $password = "123456"
 
           if (Get-LocalUser -Name $username -ErrorAction SilentlyContinue) {
               Remove-LocalUser -Name $username
           }
 
-          $securePass = ConvertTo-SecureString $password -AsPlainText -Force
-
-          New-LocalUser -Name $username -Password $securePass -AccountNeverExpires
-          Add-LocalGroupMember -Group "Administrators" -Member $username
-          Add-LocalGroupMember -Group "Remote Desktop Users" -Member $username
+          net user $username $password /add
+          net localgroup Administrators $username /add
+          net localgroup "Remote Desktop Users" $username /add
 
           echo "RDP_USERNAME=$username" >> $env:GITHUB_ENV
           echo "RDP_PASSWORD=$password" >> $env:GITHUB_ENV
@@ -44,7 +47,6 @@ jobs:
           Invoke-WebRequest `
             -Uri "https://pkgs.tailscale.com/stable/tailscale-setup-1.82.0-amd64.msi" `
             -OutFile "$env:TEMP\tailscale.msi"
-
           Start-Process msiexec.exe -ArgumentList "/i `"$env:TEMP\tailscale.msi`" /quiet" -Wait
 
       - name: Connect Tailscale
@@ -52,7 +54,6 @@ jobs:
           & "$env:ProgramFiles\Tailscale\tailscale.exe" up `
             --authkey=${{ secrets.TAILSCALE_AUTH_KEY }} `
             --hostname=gh-rdp-$env:GITHUB_RUN_ID
-
           $ip = & "$env:ProgramFiles\Tailscale\tailscale.exe" ip -4
           echo "TAILSCALE_IP=$ip" >> $env:GITHUB_ENV
 
