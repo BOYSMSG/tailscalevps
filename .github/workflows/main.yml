@@ -4,27 +4,32 @@ on:
   workflow_dispatch:
 
 jobs:
-  secure-rdp:
+  rdp:
     runs-on: windows-latest
     timeout-minutes: 3600
 
     steps:
       - name: Enable RDP & Firewall
         run: |
-          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' `
+          Set-ItemProperty -Path "HKLM:\System\CurrentControlSet\Control\Terminal Server" `
             -Name "fDenyTSConnections" -Value 0 -Force
 
-          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' `
+          Set-ItemProperty -Path "HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp" `
             -Name "UserAuthentication" -Value 0 -Force
 
           netsh advfirewall firewall add rule name="RDP-3389" dir=in action=allow protocol=TCP localport=3389
 
           Restart-Service TermService -Force
 
-      - name: Create RDP User (EXTRA EASY PASSWORD)
+      - name: Create RDP User (FIXED EASY PASSWORD)
         run: |
           $username = "RDP"
-          $password = "Rdp@123"   # EASY TO TYPE
+          $password = "Rdp@123"
+
+          # Delete user if already exists (IMPORTANT)
+          if (Get-LocalUser -Name $username -ErrorAction SilentlyContinue) {
+              Remove-LocalUser -Name $username
+          }
 
           $securePass = ConvertTo-SecureString $password -AsPlainText -Force
 
@@ -52,7 +57,7 @@ jobs:
           $ip = & "$env:ProgramFiles\Tailscale\tailscale.exe" ip -4
           echo "TAILSCALE_IP=$ip" >> $env:GITHUB_ENV
 
-      - name: Show RDP Details
+      - name: Show RDP Access
         run: |
           Write-Host "=============================="
           Write-Host "RDP READY"
